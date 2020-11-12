@@ -1,0 +1,97 @@
+---
+title: "Twitter scraping preprocessing"
+author: "Anna Stuckert"
+date: "11/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r}
+#Read in packages
+pacman::p_load(here, tidyverse, dplyr, corrplot, reshape2, ggthemes, ggsci)
+
+```
+
+load data - presidential tweets
+```{r}
+Trump_df <- read.csv(here::here("Data", 'Trump_Only.csv'))
+Biden_df <- read.csv(here::here("Data", 'Biden_Only.csv'))
+
+president_df <- rbind(Trump_df, Biden_df)
+```
+
+load data - follower tweets
+```{r}
+Trump_follower_df <- read.csv(here::here("Data", 'Trump_Followers.csv'))
+Biden_follower_df <- read.csv(here::here("Data", 'Biden_Followers.csv'))
+
+follower_df <- rbind(Trump_follower_df, Biden_follower_df)
+```
+
+Load tweet_cleaning_function
+
+```{r}
+#Run data preprocessing script
+source(here::here("Code", "Tweet_cleaning_function.R"))
+source(here::here("Code", "compare_sentiment.R"))
+Trump_sentiment <- get_sentiment(Trump_df, dictionary = "afinn")
+Biden_sentiment <- get_sentiment(Biden_df, dictionary = "afinn")
+Presidents_sentiment <- get_sentiment(president_df, dictionary = "afinn")
+
+
+# function for comparing their sentiment if using bing dictionary
+#comparing_sentiments(Trump, Biden)
+```
+
+```{r}
+
+#Code for comparing their sentiment when using afinn dictionary (or any scaled dictionary rather than binary)
+
+#Mean sentiment (across positive and negative values)
+mean(Biden_sentiment$value)
+mean(Trump_sentiment$value)
+
+#Creating column for absolute value (so overall sentiment, regardless of positive or negative)
+Biden_sentiment$abs_val <- abs(Biden_sentiment$value)
+Trump_sentiment$abs_val <- abs(Trump_sentiment$value)
+Presidents_sentiment$abs_val <- abs(Presidents_sentiment$value)
+
+mean(Biden_sentiment$abs_val)
+mean(Trump_sentiment$abs_val)
+mean(Presidents_sentiment$abs_val)
+
+#find out how many unique tweets are among the sentiment_df from each candidate
+length(unique(Biden_df$id))
+length(unique(Trump_df$id))
+
+#find mean sentiment PR TWEET (also the tweets that were not valenced)
+sum(Biden_sentiment$abs_val)/length(unique(Biden_df$id))
+sum(Trump_sentiment$abs_val)/length(unique(Trump_df$id))
+
+```
+
+Plot
+
+```{r}
+
+#setting color codes to reflect party colors
+color1 <-  "#0015BC"
+color2 <-  "#DE0100"
+
+#mean value both pos and neg
+ggplot(Presidents_sentiment, aes(handle, value, fill = handle)) + 
+  geom_bar(stat = "summary")+
+  scale_fill_manual(values=c(color1, color2))
+
+#absolute sentiment
+ggplot(Presidents_sentiment, aes(handle, abs_val, fill = handle)) + 
+  geom_bar(stat = "summary") + 
+  scale_fill_manual(values=c(color1, color2))
+
+
+```
+
