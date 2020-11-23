@@ -1,7 +1,7 @@
 library(tidyverse, pacman)
 pacman::p_load("twitteR", "ROAuth", "instaR", "tidyverse", "tidytext", "stringr")
 
-clean_tweets <- function(df, dictionary = "bing"){
+clean_tweets <- function(df, dictionary = "afinn"){
   
   reg_words <- "([^A-Za-z_\\d#@']|'(?![A-Za-z_\\d#@]))"
   

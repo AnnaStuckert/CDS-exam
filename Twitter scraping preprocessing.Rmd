@@ -11,66 +11,190 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load packages
 ```{r}
-#Read in packages
-pacman::p_load(here, tidyverse, dplyr, corrplot, reshape2, ggthemes, ggsci)
+#Load the necessary packages
+pacman::p_load(here, tidyverse, ggthemes)
+#here for loading data and functions, tidyverse from data manipulation, statistics and plotting, ggthemes for creating aesthetic plots.
 
 ```
 
 load data - presidential tweets
 ```{r}
+#Loading datasets of tweets for each presidential candidate
 Trump_df <- read.csv(here::here("Data", 'Trump_Only.csv'))
 Biden_df <- read.csv(here::here("Data", 'Biden_Only.csv'))
 
+#Renaming twitter handle column to reflect the surname of the candidate
+Biden_df<- Biden_df %>% rename(Candidate = handle)
+Trump_df<- Trump_df %>% rename(Candidate = handle)
+
+#Renaming content of candidate colun to relfect each candidate
+Biden_df$Candidate<- ifelse(Biden_df$Candidate == "JoeBiden", "Biden",)
+Trump_df$Candidate<- ifelse(Trump_df$Candidate == "realDonaldTrump", "Trump",)
+
+#Bind the dataframes to create a complete dataframe with data from both candidates
 president_df <- rbind(Trump_df, Biden_df)
+
 ```
 
 load data - follower tweets
 ```{r}
+#Loading datasets for each candidate's followers' tweets
 Trump_follower_df <- read.csv(here::here("Data", 'Trump_Followers.csv'))
 Biden_follower_df <- read.csv(here::here("Data", 'Biden_Followers.csv'))
 
+#Renaming content of candidate column to reflect each candidate follower base
+Biden_follower_df$following<- ifelse(Biden_follower_df$following == "Biden", "Biden followers",)
+Trump_follower_df$following<- ifelse(Trump_follower_df$following == "Trump", "Trump followers",)
+
+#Bind the dataframes to create a complete dataframe with data from both follower groups
 follower_df <- rbind(Trump_follower_df, Biden_follower_df)
 ```
 
 Load tweet_cleaning_function
 
 ```{r}
-#Run data preprocessing script
+#Load function for preprocessing tweets
 source(here::here("Code", "Tweet_cleaning_function.R"))
-source(here::here("Code", "compare_sentiment.R"))
-Trump_sentiment <- get_sentiment(Trump_df, dictionary = "afinn")
-Biden_sentiment <- get_sentiment(Biden_df, dictionary = "afinn")
-Presidents_sentiment <- get_sentiment(president_df, dictionary = "afinn")
 
+#Run data preprocessing function on all presidential datasets (each separate one and the combined dataframe)
+Trump_sentiment <- clean_tweets(Trump_df, dictionary = "afinn")
+Biden_sentiment <- clean_tweets(Biden_df, dictionary = "afinn")
+Presidents_sentiment <- clean_tweets(president_df, dictionary = "afinn")
 
-# function for comparing their sentiment if using bing dictionary
-#comparing_sentiments(Trump, Biden)
-```
-
-```{r}
-
-#Code for comparing their sentiment when using afinn dictionary (or any scaled dictionary rather than binary)
-
-#Mean sentiment (across positive and negative values)
-mean(Biden_sentiment$value)
-mean(Trump_sentiment$value)
-
-#Creating column for absolute value (so overall sentiment, regardless of positive or negative)
+#Creating column for absolute value (i.e. overall sentiment, regardless of positive or negative)
 Biden_sentiment$abs_val <- abs(Biden_sentiment$value)
 Trump_sentiment$abs_val <- abs(Trump_sentiment$value)
 Presidents_sentiment$abs_val <- abs(Presidents_sentiment$value)
+```
 
+Descriptive statistics
+```{r}
+#Mean overall sentiment (across positive and negative values)
+mean(Biden_sentiment$value)
+mean(Trump_sentiment$value)
+
+#Standadrd deviation for overall sentiment
+sd(Biden_sentiment$value)
+sd(Trump_sentiment$value)
+
+#Mean absolute sentiment
 mean(Biden_sentiment$abs_val)
 mean(Trump_sentiment$abs_val)
-mean(Presidents_sentiment$abs_val)
+
+#Standard deviation for absolute sentiment
+sd(Biden_sentiment$abs_val)
+sd(Trump_sentiment$abs_val)
 
 #find out how many unique tweets are among the sentiment_df from each candidate
 length(unique(Biden_df$id))
 length(unique(Trump_df$id))
 
-#find mean sentiment PR TWEET (also the tweets that were not valenced)
+#find mean sentiment PER TWEET (also the tweets that were not valenced)
 sum(Biden_sentiment$abs_val)/length(unique(Biden_df$id))
 sum(Trump_sentiment$abs_val)/length(unique(Trump_df$id))
+
+```
+
+Plots
+
+```{r}
+
+#setting color codes to reflect party colors
+color1 <-  "#0015BC"
+color2 <-  "#DE0100"
+
+#Plot of mean valence both positive and negative
+plot1 <- ggplot(Presidents_sentiment, aes(Candidate, value, fill = Candidate)) + 
+  geom_bar(stat = "summary")+
+  geom_errorbar(stat = "summary", fun.data = mean_se)+
+  scale_fill_manual(values=c(color1, color2))+
+  ylab("Mean sentiment")+
+  xlab("Presidential candidate")+
+  labs(fill = "Candidate")+
+  ggtitle("Mean sentiment per candidate")
+plot1
+
+#Plot of absolute sentiment
+ggplot(Presidents_sentiment, aes(Candidate, abs_val, fill = Candidate)) + 
+  geom_bar(stat = "summary") + 
+  geom_errorbar(stat = "summary", fun.data = mean_se)+
+  scale_fill_manual(values=c(color1, color2))+
+  ylab("Mean absolute sentiment")+
+  xlab("Presidential candidate")+
+  labs(fill = "Candidate")+
+  ggtitle("Mean absolute sentiment per candidate")
+
+#converting dates from charecter strings to variables of class "date" in order to allow for plotting
+
+class(Presidents_sentiment$date)
+Presidents_sentiment$date_new <- as.Date(Presidents_sentiment$date)
+
+#subsetting for Dates from 18th october and forward
+df_3_weeks_pres <- Presidents_sentiment[Presidents_sentiment$date_new > as.Date("2020-10-18"),]
+
+#Valence development over time (- both presidents)using linear regression to estimate tendency
+ggplot(df_3_weeks_pres, aes(x = date_new, y= value, color = Candidate)) + geom_smooth(method = "lm", alpha = 0.2) + ggtitle("Candidates valence development over final 3 weeks around election") + xlab("Date") + ylab("Valence")+ theme_stata(scheme = "s2mono") + 
+  scale_color_manual(values=c(color1, color2))+
+  labs(color = "Candidate")
+
+```
+
+Statistical models
+```{r}
+#Turning the Candidate column into a factor in order to use it for statistical modelling (lm() function cannot use character variables)
+Presidents_sentiment$Candidate <- as.factor(Presidents_sentiment$Candidate)
+
+#Predicting mean valence from Candidate
+m_candidate_mean_val <- lm(value ~ Candidate, Presidents_sentiment)
+summary(m_candidate_mean_val) #looking at model summary
+
+#Predicting mean absolute valence from Candidate
+m_candidate_mean_abs_val <- lm(abs_val ~ Candidate, Presidents_sentiment)
+summary(m_candidate_mean_abs_val) #looking at model summary
+```
+
+FOR FOLLOWERS
+
+
+```{r}
+#Run data preprocessing script for each folloer base, and combined dataset
+Trump_follower_sentiment <- clean_tweets(Trump_follower_df, dictionary = "afinn")
+Biden_follower_sentiment <- clean_tweets(Biden_follower_df, dictionary = "afinn")
+Follower_sentiment <- clean_tweets(follower_df, dictionary = "afinn")
+
+#Creating column for absolute value (so overall sentiment, regardless of positive or negative)
+Biden_follower_sentiment$abs_val <- abs(Biden_follower_sentiment$value)
+Trump_follower_sentiment$abs_val <- abs(Trump_follower_sentiment$value)
+Follower_sentiment$abs_val <- abs(Follower_sentiment$value)
+```
+
+
+Descriptive statistics
+```{r}
+
+#Mean overall sentiment (across positive and negative values)
+mean(Biden_follower_sentiment$value)
+mean(Trump_follower_sentiment$value)
+
+#Standard deviation of sentiment
+sd(Biden_follower_sentiment$value)
+sd(Trump_follower_sentiment$value)
+
+#Mean absolute sentiment
+mean(Biden_follower_sentiment$abs_val)
+mean(Trump_follower_sentiment$abs_val)
+
+#Standard deviation of sentiment
+sd(Biden_follower_sentiment$abs_val)
+sd(Trump_follower_sentiment$abs_val)
+
+#find out how many unique tweets are among the sentiment_df from each candidate
+length(unique(Biden_follower_df$id))
+length(unique(Trump_follower_df$id))
+
+#find mean sentiment PER TWEET (also the tweets that were not valenced)
+sum(Biden_follower_sentiment$abs_val)/length(unique(Biden_follower_df$id))
+sum(Trump_follower_sentiment$abs_val)/length(unique(Trump_follower_df$id))
 
 ```
 
@@ -82,16 +206,49 @@ Plot
 color1 <-  "#0015BC"
 color2 <-  "#DE0100"
 
-#mean value both pos and neg
-ggplot(Presidents_sentiment, aes(handle, value, fill = handle)) + 
+#Plot of mean value both positive and negative
+ggplot(Follower_sentiment, aes(following, value, fill = following)) + 
   geom_bar(stat = "summary")+
-  scale_fill_manual(values=c(color1, color2))
+  geom_errorbar(stat = "summary", fun.data = mean_se)+
+  scale_fill_manual(values=c(color1, color2))+
+  ylab("Mean sentiment")+
+  xlab("Follower group")+
+  labs(fill = "Follower group")+
+  ggtitle("Mean sentiment for follower groups")
 
-#absolute sentiment
-ggplot(Presidents_sentiment, aes(handle, abs_val, fill = handle)) + 
+#Plot of mean in absolute sentiment
+ggplot(Follower_sentiment, aes(following, abs_val, fill = following)) + 
   geom_bar(stat = "summary") + 
-  scale_fill_manual(values=c(color1, color2))
+  geom_errorbar(stat = "summary", fun.data = mean_se)+
+  scale_fill_manual(values=c(color1, color2))+
+  ylab("Mean absolute sentiment")+
+  xlab("Follower group")+
+  labs(fill = "Follower group")+
+  ggtitle("Mean absolute sentiment for follower groups")
 
+#converting dates from charecter strings to variables of class "date" in order to allow for plotting
+class(Follower_sentiment$date)
+Follower_sentiment$date_new <- as.Date(Follower_sentiment$date)
 
+#subsetting for Dates from 18th october and forward
+df_3_weeks_fol <- Follower_sentiment[Follower_sentiment$date_new > as.Date("2020-10-18"),]
+
+#with linear regression
+#Valence development over time
+ggplot(df_3_weeks_fol, aes(x = date_new, y= value, color = following)) + geom_smooth(method = "lm", alpha = 0.2) + ggtitle("Follower group valence development over final 3 weeks around election") + xlab("Date") + ylab("Valence")+ theme_stata(scheme = "s2mono") + 
+  scale_color_manual(values=c(color1, color2))+
+  labs(color = "Candidate follower group")
+
+```
+
+Statistical models
+```{r}
+#Predicting mean valence from follower group
+m_follower_mean_val <- lm(value ~ following, Follower_sentiment) #Constructing the model
+summary(m_follower_mean_val) #Investigating model summary
+
+#Predicting mean absolute valence from follower group
+m_follower_mean_abs_val <- lm(abs_val ~ following, Follower_sentiment) #Constructing the model
+summary(m_follower_mean_abs_val) #investigating model summary
 ```
 
