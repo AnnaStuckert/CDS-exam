@@ -16,3 +16,7 @@ Unique for presidential datasets
 Unique for follower datasets
 - handle: The Twitter handle of each follower
 - follwing: Which presidential candidate the user in question followers.
+
+The run the R script, download the repository and open the Rproject file through R studio. This gives the opportunity  to open the file called "Twitter scraping preprocessing.Rmd" - if opened through the rproject, this should ensure dependencies using here:: to the correct folders, and the script should run smoothly, as packages are loaded through pacman::pload, which ensures uninstalled packages are uninstalled. If, however, you are met with difficulties, you can load the packages using install.packages("insert package name"). 
+
+The python script can be downloaed and run directly. One should open the script through Jupyter lab in Anaconda, using Python. Software versions are described CDS project document.
